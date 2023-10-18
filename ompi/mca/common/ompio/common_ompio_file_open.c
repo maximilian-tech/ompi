@@ -82,7 +82,7 @@ int mca_common_ompio_file_open (ompi_communicator_t *comm,
     ompio_fh->f_file_convertor = opal_convertor_create (remote_arch, 0);
 
     if ( true == use_sharedfp ) {
-	ret = ompi_comm_dup (comm, &ompio_fh->f_comm);
+	ret = MPI_Comm_dup (comm, &ompio_fh->f_comm);
 	if ( OMPI_SUCCESS != ret )  {
 	    goto fn_fail;
 	}

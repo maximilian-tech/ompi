@@ -257,13 +257,12 @@ int mca_fcoll_vulcan_file_write_all (ompio_file_t *fh,
     start_comm_time = MPI_Wtime();
 #endif
     if ( 1 == mca_fcoll_vulcan_num_groups ) {
-        ret = fh->f_comm->c_coll->coll_allreduce (MPI_IN_PLACE,
-                                                  broken_total_lengths,
-						  fh->f_num_aggrs,
-						  MPI_LONG,
-                                                  MPI_SUM,
-						  fh->f_comm,
-						  fh->f_comm->c_coll->coll_allreduce_module);
+        ret = MPI_Allreduce (MPI_IN_PLACE,
+                             broken_total_lengths,
+						     fh->f_num_aggrs,
+						     MPI_LONG,
+                             MPI_SUM,
+						     fh->f_comm);
         if( OMPI_SUCCESS != ret){
             goto exit;
         }
@@ -329,14 +328,13 @@ int mca_fcoll_vulcan_file_write_all (ompio_file_t *fh,
     start_comm_time = MPI_Wtime();
 #endif
     if ( 1 == mca_fcoll_vulcan_num_groups ) {
-        ret = fh->f_comm->c_coll->coll_allgather(broken_counts,
-						 fh->f_num_aggrs,
-						 MPI_INT,
-						 result_counts,
-						 fh->f_num_aggrs,
-						 MPI_INT,
-						 fh->f_comm,
-						 fh->f_comm->c_coll->coll_allgather_module);            
+        ret = MPI_Allgather(broken_counts,
+						    fh->f_num_aggrs,
+						    MPI_INT,
+						    result_counts,
+						    fh->f_num_aggrs,
+						    MPI_INT,
+						    fh->f_comm);
     }
     else {
         ret = ompi_fcoll_base_coll_allgather_array (broken_counts,
@@ -415,15 +413,14 @@ int mca_fcoll_vulcan_file_write_all (ompio_file_t *fh,
         start_comm_time = MPI_Wtime();
 #endif
         if ( 1 == mca_fcoll_vulcan_num_groups ) {
-            ret = fh->f_comm->c_coll->coll_allgatherv (broken_iov_arrays[i],
-                                                      broken_counts[i],
-                                                      fh->f_iov_type,
-                                                      aggr_data[i]->global_iov_array,
-                                                      aggr_data[i]->fview_count,
-                                                      displs,
-                                                      fh->f_iov_type,
-                                                      fh->f_comm,
-                                                      fh->f_comm->c_coll->coll_allgatherv_module );
+            ret = MPI_Allgatherv (broken_iov_arrays[i],
+                                  broken_counts[i],
+                                  fh->f_iov_type,
+                                  aggr_data[i]->global_iov_array,
+                                  aggr_data[i]->fview_count,
+                                  displs,
+                                  fh->f_iov_type,
+                                  fh->f_comm);
         }
         else {
             ret = ompi_fcoll_base_coll_allgatherv_array (broken_iov_arrays[i],
@@ -587,8 +584,8 @@ int mca_fcoll_vulcan_file_write_all (ompio_file_t *fh,
         }
     }
 
-    ret = ompi_request_wait_all ( (fh->f_procs_per_group + 1 )*fh->f_num_aggrs,
-                                  reqs, MPI_STATUS_IGNORE);
+    ret = MPI_Waitall ( (fh->f_procs_per_group + 1 )*fh->f_num_aggrs,
+                                  reqs, MPI_STATUSES_IGNORE);
 
     for (index = 1; index < cycles; index++) {
         SWAP_AGGR_POINTERS(aggr_data, fh->f_num_aggrs);
@@ -616,14 +613,14 @@ int mca_fcoll_vulcan_file_write_all (ompio_file_t *fh,
             }
         }
 
-        ret = ompi_request_wait_all ( (fh->f_procs_per_group + 1 )*fh->f_num_aggrs,
-                                      reqs, MPI_STATUS_IGNORE);
+        ret = MPI_Waitall ( (fh->f_procs_per_group + 1 )*fh->f_num_aggrs,
+                                      reqs, MPI_STATUSES_IGNORE);
         if (OMPI_SUCCESS != ret){
             goto exit;
         }
 
         if(NOT_AGGR_INDEX != aggr_index) {
-            ret = ompi_request_wait(&req_iwrite, MPI_STATUS_IGNORE);
+            ret = MPI_Wait(&req_iwrite, MPI_STATUS_IGNORE);
             if (OMPI_SUCCESS != ret){
                 goto exit;
             }
@@ -649,7 +646,7 @@ int mca_fcoll_vulcan_file_write_all (ompio_file_t *fh,
         }
 
         if(NOT_AGGR_INDEX != aggr_index) {
-            ret = ompi_request_wait(&req_iwrite, MPI_STATUS_IGNORE);
+            ret = MPI_Wait(&req_iwrite, MPI_STATUS_IGNORE);
             if (OMPI_SUCCESS != ret){
                 goto exit;
             }
@@ -1174,22 +1171,22 @@ static int shuffle_init ( int index, int cycles, int aggregator, int rank, mca_i
                 size_t datatype_size;
                 reqs[i] = MPI_REQUEST_NULL;
                 if ( 0 < data->disp_index[i] ) {
-                    ompi_datatype_create_hindexed(data->disp_index[i],
+                    MPI_Type_create_hindexed(data->disp_index[i],
                                                   data->blocklen_per_process[i],
                                                   data->displs_per_process[i],
                                                   MPI_BYTE,
                                                   &data->recvtype[i]);
-                    ompi_datatype_commit(&data->recvtype[i]);
-                    opal_datatype_type_size(&data->recvtype[i]->super, &datatype_size);
+                    MPI_Type_commit(&data->recvtype[i]);
+                    MPI_Type_size(&data->recvtype[i]->super, &datatype_size);
                     
                     if (datatype_size){
-                        ret = MCA_PML_CALL(irecv(data->global_buf,
-                                                 1,
-                                                 data->recvtype[i],
-                                                 data->procs_in_group[i],
-                                                 FCOLL_VULCAN_SHUFFLE_TAG+index,
-                                                 data->comm,
-                                                 &reqs[i]));
+                        ret = MPI_Irecv(data->global_buf,
+                                        1,
+                                        data->recvtype[i],
+                                        data->procs_in_group[i],
+                                        FCOLL_VULCAN_SHUFFLE_TAG+index,
+                                        data->comm,
+                                        &reqs[i]);
                         if (OMPI_SUCCESS != ret){
                             goto exit;
                         }
@@ -1254,21 +1251,20 @@ static int shuffle_init ( int index, int cycles, int aggregator, int rank, mca_i
         data->bytes_sent = bytes_sent;
 
         if ( 0 <= block_index ) {
-            ompi_datatype_create_hindexed(block_index+1,
+            MPI_Type_create_hindexed(block_index+1,
                                           blocklength_proc,
                                           displs_proc,
                                           MPI_BYTE,
                                           &newType);
-            ompi_datatype_commit(&newType);
+            MPI_Type_commit(&newType);
 
-            ret = MCA_PML_CALL(isend((char *)send_mem_address,
+            ret = MPI_Isend((char *)send_mem_address,
                                      1,
                                      newType,
                                      aggregator,
                                      FCOLL_VULCAN_SHUFFLE_TAG+index,
-                                     MCA_PML_BASE_SEND_STANDARD,
                                      data->comm,
-                                     &reqs[data->procs_per_group]));
+                                     &reqs[data->procs_per_group]);
             if ( MPI_DATATYPE_NULL != newType ) {
                 ompi_datatype_destroy(&newType);
             }
@@ -1372,11 +1368,11 @@ static int mca_fcoll_vulcan_minmax ( ompio_file_t *fh, struct iovec *iov, int io
         min = 0;
         max = 0;
     }
-    fh->f_comm->c_coll->coll_allreduce ( &min, &globalmin, 1, MPI_LONG, MPI_MIN,
-					 fh->f_comm, fh->f_comm->c_coll->coll_allreduce_module);
+    MPI_Allreduce ( &min, &globalmin, 1, MPI_LONG, MPI_MIN,
+					 fh->f_comm);
     
-    fh->f_comm->c_coll->coll_allreduce ( &max, &globalmax, 1, MPI_LONG, MPI_MAX,
-					 fh->f_comm, fh->f_comm->c_coll->coll_allreduce_module);
+    MPI_Allreduce ( &max, &globalmax, 1, MPI_LONG, MPI_MAX,
+					 fh->f_comm);
 
     //    if ( fh->f_rank < 10 ) printf("[%d]: min=%ld max=%ld globalmin=%ld, globalmax=%ld num_aggregators=%d\n", fh->f_rank, min, max, globalmin, globalmax, num_aggregators);
 
