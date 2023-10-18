@@ -745,20 +745,19 @@ mca_fcoll_dynamic_gen2_file_read_all (ompio_file_t *fh,
             for (i=0;i<fh->f_procs_per_group;i++){
                 send_req[i] = MPI_REQUEST_NULL;
                 if ( 0 < disp_index[i] ) {
-                    ompi_datatype_create_hindexed(disp_index[i],
+                    MPI_Type_create_hindexed(disp_index[i],
                                                   blocklen_per_process[i],
                                                   displs_per_process[i],
                                                   MPI_BYTE,
                                                   &sendtype[i]);
-                    ompi_datatype_commit(&sendtype[i]);
-                    ret = MCA_PML_CALL (isend(global_buf,
+                    MPI_Type_commit(&sendtype[i]);
+                    ret = MPI_Isend(global_buf,
                                               1,
                                               sendtype[i],
                                               fh->f_procs_in_group[i],
                                               123,
-                                              MCA_PML_BASE_SEND_STANDARD,
                                               fh->f_comm,
-                                              &send_req[i]));
+                                              &send_req[i]);
                     if(OMPI_SUCCESS != ret){
                         goto exit;
                     }
@@ -791,28 +790,28 @@ mca_fcoll_dynamic_gen2_file_read_all (ompio_file_t *fh,
 #if OMPIO_FCOLL_WANT_TIME_BREAKDOWN
         start_rcomm_time = MPI_Wtime();
 #endif
-        ret = MCA_PML_CALL(irecv(receive_buf,
+        ret = MPI_Irecv(receive_buf,
                                  bytes_received,
                                  MPI_BYTE,
                                  my_aggregator,
                                  123,
                                  fh->f_comm,
-                                 &recv_req));
+                                 &recv_req);
         if (OMPI_SUCCESS != ret){
             goto exit;
         }
 
 
         if (my_aggregator == fh->f_rank){
-            ret = ompi_request_wait_all (fh->f_procs_per_group,
+            ret = MPI_Waitall (fh->f_procs_per_group,
                                          send_req,
-                                         MPI_STATUS_IGNORE);
+                                         MPI_STATUSES_IGNORE);
             if (OMPI_SUCCESS != ret){
                 goto exit;
             }
         }
 
-        ret = ompi_request_wait (&recv_req, MPI_STATUS_IGNORE);
+        ret = MPI_Wait (&recv_req, MPI_STATUS_IGNORE);
         if (OMPI_SUCCESS != ret){
             goto exit;
         }
@@ -933,7 +932,7 @@ exit:
         if (NULL != sendtype){
             for (i = 0; i < fh->f_procs_per_group; i++) {
                 if ( MPI_DATATYPE_NULL != sendtype[i] ) {
-                    ompi_datatype_destroy(&sendtype[i]);
+                    MPI_Type_free(&sendtype[i]);
                 }
             }
             free(sendtype);

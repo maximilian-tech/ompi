@@ -253,13 +253,12 @@ int mca_fcoll_dynamic_gen2_file_write_all (ompio_file_t *fh,
     start_comm_time = MPI_Wtime();
 #endif
     if ( 1 == mca_fcoll_dynamic_gen2_num_groups ) {
-        ret = fh->f_comm->c_coll->coll_allreduce (MPI_IN_PLACE,
-                                                  broken_total_lengths,
-                                                  dynamic_gen2_num_io_procs,
-                                                  MPI_LONG,
-                                                  MPI_SUM,
-                                                  fh->f_comm,
-                                                  fh->f_comm->c_coll->coll_allreduce_module);
+        ret = MPI_Allreduce (MPI_IN_PLACE,
+                             broken_total_lengths,
+                             dynamic_gen2_num_io_procs,
+                             MPI_LONG,
+                             MPI_SUM,
+                             fh->f_comm);
         if( OMPI_SUCCESS != ret){
             goto exit;
         }
@@ -323,14 +322,13 @@ int mca_fcoll_dynamic_gen2_file_write_all (ompio_file_t *fh,
     start_comm_time = MPI_Wtime();
 #endif
     if ( 1 == mca_fcoll_dynamic_gen2_num_groups ) {
-        ret = fh->f_comm->c_coll->coll_allgather(broken_counts,
-                                                dynamic_gen2_num_io_procs,
-                                                MPI_INT,
-                                                result_counts,
-                                                dynamic_gen2_num_io_procs,
-                                                MPI_INT,
-                                                fh->f_comm,
-                                                fh->f_comm->c_coll->coll_allgather_module);            
+        ret = MPI_Allgather(broken_counts,
+                            dynamic_gen2_num_io_procs,
+                            MPI_INT,
+                            result_counts,
+                            dynamic_gen2_num_io_procs,
+                            MPI_INT,
+                            fh->f_comm);
     }
     else {
         ret = ompi_fcoll_base_coll_allgather_array (broken_counts,
@@ -409,15 +407,14 @@ int mca_fcoll_dynamic_gen2_file_write_all (ompio_file_t *fh,
         start_comm_time = MPI_Wtime();
 #endif
         if ( 1 == mca_fcoll_dynamic_gen2_num_groups ) {
-            ret = fh->f_comm->c_coll->coll_allgatherv (broken_iov_arrays[i],
-                                                      broken_counts[i],
-                                                      fh->f_iov_type,
-                                                      aggr_data[i]->global_iov_array,
-                                                      aggr_data[i]->fview_count,
-                                                      displs,
-                                                      fh->f_iov_type,
-                                                      fh->f_comm,
-                                                      fh->f_comm->c_coll->coll_allgatherv_module );
+            ret = MPI_Allgatherv (broken_iov_arrays[i],
+                                  broken_counts[i],
+                                  fh->f_iov_type,
+                                  aggr_data[i]->global_iov_array,
+                                  aggr_data[i]->fview_count,
+                                  displs,
+                                  fh->f_iov_type,
+                                  fh->f_comm);
         }
         else {
             ret = ompi_fcoll_base_coll_allgatherv_array (broken_iov_arrays[i],
@@ -589,8 +586,8 @@ int mca_fcoll_dynamic_gen2_file_write_all (ompio_file_t *fh,
         }
 
         /* Finish communication for iteration i-1 */
-        ret = ompi_request_wait_all ( (fh->f_procs_per_group + 1 )*dynamic_gen2_num_io_procs, 
-                                      prev_reqs, MPI_STATUS_IGNORE);
+        ret = MPI_Waitall ( (fh->f_procs_per_group + 1 )*dynamic_gen2_num_io_procs,
+                                      prev_reqs, MPI_STATUSES_IGNORE);
         if (OMPI_SUCCESS != ret){
             goto exit;
         }
@@ -619,8 +616,8 @@ int mca_fcoll_dynamic_gen2_file_write_all (ompio_file_t *fh,
         SWAP_REQUESTS(curr_reqs,prev_reqs);
         SWAP_AGGR_POINTERS(aggr_data,dynamic_gen2_num_io_procs); 
         
-        ret = ompi_request_wait_all ( (fh->f_procs_per_group + 1 )*dynamic_gen2_num_io_procs, 
-                                      prev_reqs, MPI_STATUS_IGNORE);
+        ret = MPI_Waitall ( (fh->f_procs_per_group + 1 )*dynamic_gen2_num_io_procs,
+                                      prev_reqs, MPI_STATUSES_IGNORE);
         if (OMPI_SUCCESS != ret){
             goto exit;
         }
@@ -670,10 +667,10 @@ exit :
                 if (NULL != aggr_data[i]->recvtype){
                     for (j =0; j< aggr_data[i]->procs_per_group; j++) {
                         if ( MPI_DATATYPE_NULL != aggr_data[i]->recvtype[j] ) {
-                            ompi_datatype_destroy(&aggr_data[i]->recvtype[j]);
+                            MPI_Type_free(&aggr_data[i]->recvtype[j]);
                         }
                         if ( MPI_DATATYPE_NULL != aggr_data[i]->prev_recvtype[j] ) {
-                            ompi_datatype_destroy(&aggr_data[i]->prev_recvtype[j]);
+                            MPI_Type_free(&aggr_data[i]->prev_recvtype[j]);
                         }
 
                     }
@@ -1147,22 +1144,22 @@ static int shuffle_init ( int index, int cycles, int aggregator, int rank, mca_i
                 size_t datatype_size;
                 reqs[i] = MPI_REQUEST_NULL;
                 if ( 0 < data->disp_index[i] ) {
-                    ompi_datatype_create_hindexed(data->disp_index[i],
+                    MPI_Type_create_hindexed(data->disp_index[i],
                                                   data->blocklen_per_process[i],
                                                   data->displs_per_process[i],
                                                   MPI_BYTE,
                                                   &data->recvtype[i]);
-                    ompi_datatype_commit(&data->recvtype[i]);
+                    MPI_Type_commit(&data->recvtype[i]);
                     opal_datatype_type_size(&data->recvtype[i]->super, &datatype_size);
                     
                     if (datatype_size){
-                        ret = MCA_PML_CALL(irecv(data->global_buf,
+                        ret = MPI_Irecv(data->global_buf,
                                                  1,
                                                  data->recvtype[i],
                                                  data->procs_in_group[i],
                                                  FCOLL_DYNAMIC_GEN2_SHUFFLE_TAG+index,
                                                  data->comm,
-                                                 &reqs[i]));
+                                                 &reqs[i]);
                         if (OMPI_SUCCESS != ret){
                             goto exit;
                         }
@@ -1227,21 +1224,20 @@ static int shuffle_init ( int index, int cycles, int aggregator, int rank, mca_i
         data->bytes_sent = bytes_sent;
 
         if ( 0 <= block_index ) {
-            ompi_datatype_create_hindexed(block_index+1,
+            MPI_Type_create_hindexed(block_index+1,
                                           blocklength_proc,
                                           displs_proc,
                                           MPI_BYTE,
                                           &newType);
-            ompi_datatype_commit(&newType);
+            MPI_Type_commit(&newType);
 
-            ret = MCA_PML_CALL(isend((char *)send_mem_address,
+            ret = MPI_Isend((char *)send_mem_address,
                                      1,
                                      newType,
                                      aggregator,
                                      FCOLL_DYNAMIC_GEN2_SHUFFLE_TAG+index,
-                                     MCA_PML_BASE_SEND_STANDARD,
                                      data->comm,
-                                     &reqs[data->procs_per_group]));
+                                     &reqs[data->procs_per_group]);
             if ( MPI_DATATYPE_NULL != newType ) {
                 ompi_datatype_destroy(&newType);
             }
