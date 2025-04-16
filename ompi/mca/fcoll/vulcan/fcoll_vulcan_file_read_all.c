@@ -791,12 +791,12 @@ mca_fcoll_vulcan_file_read_all (ompio_file_t *fh,
         start_rcomm_time = MPI_Wtime();
 #endif
         ret = MPI_Irecv(receive_buf,
-                                 bytes_received,
-                                 MPI_BYTE,
-                                 my_aggregator,
-                                 123,
-                                 fh->f_comm,
-                                 &recv_req);
+                        bytes_received,
+                        MPI_BYTE,
+                        my_aggregator,
+                        123,
+                        fh->f_comm,
+                        &recv_req);
         if (OMPI_SUCCESS != ret){
             goto exit;
         }

@@ -373,13 +373,19 @@ int ompi_fcoll_base_coll_gather_array (void *sbuf,
 
     /* Everyone but the writers sends data and returns. */
     if (procs_in_group[root_index] != rank) {
-        err = MCA_PML_CALL(send(sbuf,
-                                scount,
-                                sdtype,
-                                procs_in_group[root_index],
-                                FCOLL_TAG_GATHER,
-                                MCA_PML_BASE_SEND_STANDARD,
-                                comm));
+//        err = MCA_PML_CALL(send(sbuf,
+//                                scount,
+//                                sdtype,
+//                                procs_in_group[root_index],
+//                                FCOLL_TAG_GATHER,
+//                                MCA_PML_BASE_SEND_STANDARD,
+//                                comm));
+        err = MPI_Send(sbuf,
+                       scount,
+                       sdtype,
+                       procs_in_group[root_index],
+                       FCOLL_TAG_GATHER,
+                       comm);
         return err;
     }
 
@@ -410,13 +416,13 @@ int ompi_fcoll_base_coll_gather_array (void *sbuf,
 	    reqs[i] = MPI_REQUEST_NULL;
         }
         else {
-            err = MCA_PML_CALL(irecv(ptmp,
-                                     rcount,
-                                     rdtype,
-                                     procs_in_group[i],
-                                     FCOLL_TAG_GATHER,
-                                     comm,
-                                     &reqs[i]));
+            err = MPI_Irecv(ptmp,
+                            rcount,
+                            rdtype,
+                            procs_in_group[i],
+                            FCOLL_TAG_GATHER,
+                            comm,
+                            &reqs[i]);
             /*
             for (k=0 ; k<4 ; k++)
                 printf ("RECV %p  %d \n",
@@ -432,7 +438,8 @@ int ompi_fcoll_base_coll_gather_array (void *sbuf,
     }
 
     /* All done */
-    err = ompi_request_wait_all ( procs_per_group, reqs, MPI_STATUSES_IGNORE );
+    err = MPI_Waitall ( procs_per_group, reqs, MPI_STATUSES_IGNORE );
+//    err = ompi_request_wait_all ( procs_per_group, reqs, MPI_STATUSES_IGNORE );
     if ( NULL != reqs ) {
 	free ( reqs );
     }
@@ -456,13 +463,13 @@ int ompi_fcoll_base_coll_bcast_array (void *buff,
 
     /* Non-writers receive the data. */
     if (procs_in_group[root_index] != rank) {
-        err = MCA_PML_CALL(recv(buff,
-                                count,
-                                datatype,
-                                procs_in_group[root_index],
-                                FCOLL_TAG_BCAST,
-                                comm,
-                                MPI_STATUS_IGNORE));
+        err = MPI_Recv(buff,
+                       count,
+                       datatype,
+                       procs_in_group[root_index],
+                       FCOLL_TAG_BCAST,
+                       comm,
+                       MPI_STATUS_IGNORE);
         return err;
     }
 
@@ -473,25 +480,25 @@ int ompi_fcoll_base_coll_bcast_array (void *buff,
     }
 
     for (i=0 ; i<procs_per_group ; i++) {
+
         if (procs_in_group[i] == rank) {
-	    reqs[i] = MPI_REQUEST_NULL;
+            reqs[i] = MPI_REQUEST_NULL;
             continue;
         }
 
-        err = MCA_PML_CALL(isend(buff,
-                                 count,
-                                 datatype,
-                                 procs_in_group[i],
-                                 FCOLL_TAG_BCAST,
-                                 MCA_PML_BASE_SEND_STANDARD,
-                                 comm,
-			         &reqs[i]));
+        err = MPI_Isend(buff,
+                        count,
+                        datatype,
+                        procs_in_group[i],
+                        FCOLL_TAG_BCAST,
+                        comm,
+			            &reqs[i]);
         if (OMPI_SUCCESS != err) {
 	    free ( reqs );
             return err;
         }
     }
-    err = ompi_request_wait_all ( procs_per_group, reqs, MPI_STATUSES_IGNORE );
+    err = MPI_Waitall ( procs_per_group, reqs, MPI_STATUSES_IGNORE );
     if ( NULL != reqs ) {
 	free ( reqs );
     }

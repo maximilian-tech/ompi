@@ -1154,12 +1154,12 @@ static int shuffle_init ( int index, int cycles, int aggregator, int rank, mca_i
                     
                     if (datatype_size){
                         ret = MPI_Irecv(data->global_buf,
-                                                 1,
-                                                 data->recvtype[i],
-                                                 data->procs_in_group[i],
-                                                 FCOLL_DYNAMIC_GEN2_SHUFFLE_TAG+index,
-                                                 data->comm,
-                                                 &reqs[i]);
+                                        1,
+                                        data->recvtype[i],
+                                        data->procs_in_group[i],
+                                        FCOLL_DYNAMIC_GEN2_SHUFFLE_TAG+index,
+                                        data->comm,
+                                        &reqs[i]);
                         if (OMPI_SUCCESS != ret){
                             goto exit;
                         }
