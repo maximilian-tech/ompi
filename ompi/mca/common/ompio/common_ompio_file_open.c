@@ -46,6 +46,8 @@
 #include <unistd.h>
 #include <math.h>
 #include "common_ompio.h"
+#include "common_ompio_mpi.h"
+#include "ompi/runtime/ompi_mpiio_public.h"
 #include "ompi/mca/topo/topo.h"
 #include "opal/util/opal_getcwd.h"
 #include "opal/util/path.h"
@@ -298,6 +300,7 @@ int mca_common_ompio_file_open (ompi_communicator_t *comm,
 
     ompio_fh->f_iov_type = MPI_DATATYPE_NULL;
     ompio_fh->f_comm     = MPI_COMM_NULL;
+    ompio_fh->f_use_mpi_symbols = ompi_mpiio_internal_use_mpi;
 
     if ( ((amode&MPI_MODE_RDONLY)?1:0) + ((amode&MPI_MODE_RDWR)?1:0) +
 	 ((amode&MPI_MODE_WRONLY)?1:0) != 1 ) {
@@ -320,7 +323,7 @@ int mca_common_ompio_file_open (ompi_communicator_t *comm,
     ompio_fh->f_file_convertor = opal_convertor_create (remote_arch, 0);
 
     if ( true == use_sharedfp ) {
-	ret = ompi_comm_dup (comm, &ompio_fh->f_comm);
+	ret = mca_common_ompio_comm_dup(ompio_fh, comm);
 	if ( OMPI_SUCCESS != ret )  {
 	    goto fn_fail;
 	}
@@ -502,7 +505,7 @@ int mca_common_ompio_file_close (ompio_file_t *ompio_fh)
         return OMPI_SUCCESS;
     }
 
-    ret = ompio_fh->f_comm->c_coll->coll_barrier ( ompio_fh->f_comm, ompio_fh->f_comm->c_coll->coll_barrier_module);
+    ret = mca_common_ompio_barrier(ompio_fh);
     if ( OMPI_SUCCESS != ret ) {
         /* Not sure what to do */
         opal_output (1,"mca_common_ompio_file_close: error in Barrier \n");
@@ -636,7 +639,7 @@ int mca_common_ompio_file_close (ompio_file_t *ompio_fh)
     }
     
     if (MPI_COMM_NULL != ompio_fh->f_comm && !(ompio_fh->f_flags & OMPIO_SHAREDFP_IS_SET) )  {
-        ompi_comm_free (&ompio_fh->f_comm);
+        mca_common_ompio_comm_free(ompio_fh);
     }
 
     return ret;

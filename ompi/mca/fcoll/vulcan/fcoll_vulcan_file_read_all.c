@@ -34,6 +34,7 @@
 #include "ompi/mca/fcoll/fcoll.h"
 #include "ompi/mca/fcoll/base/fcoll_base_coll_array.h"
 #include "ompi/mca/common/ompio/common_ompio.h"
+#include "ompi/mca/common/ompio/common_ompio_mpi.h"
 #include "ompi/mca/common/ompio/common_ompio_buffer.h"
 #include "ompi/mca/io/io.h"
 #include "ompi/mca/common/ompio/common_ompio_request.h"
@@ -86,8 +87,6 @@ int mca_fcoll_vulcan_file_read_all (struct ompio_file_t *fh,
     int read_sync_type = 2;
     int *result_counts=NULL;
 
-    ompi_count_array_t fview_count_desc;
-    ompi_disp_array_t displs_desc;
     int is_gpu, is_managed;
     bool use_accelerator_buffer = false;
 
@@ -154,6 +153,7 @@ int mca_fcoll_vulcan_file_read_all (struct ompio_file_t *fh,
         // number of aggregators and number of IO nodes, we know how many aggr_data arrays we need
         // to allocate.
         aggr_data[i] = (mca_io_ompio_aggregator_data *) calloc (1, sizeof(mca_io_ompio_aggregator_data));
+        aggr_data[i]->fh = fh;
         aggr_data[i]->procs_per_group = fh->f_procs_per_group;
         aggr_data[i]->procs_in_group  = fh->f_procs_in_group;
         aggr_data[i]->comm = fh->f_comm;
@@ -197,10 +197,8 @@ int mca_fcoll_vulcan_file_read_all (struct ompio_file_t *fh,
 #if OMPIO_FCOLL_WANT_TIME_BREAKDOWN
     start_comm_time = ompi_wtime();
 #endif
-    ret = fh->f_comm->c_coll->coll_allreduce (MPI_IN_PLACE, broken_total_lengths,
-                                              fh->f_num_aggrs, MPI_LONG, MPI_SUM,
-                                              fh->f_comm,
-                                              fh->f_comm->c_coll->coll_allreduce_module);
+    ret = mca_common_ompio_allreduce(fh, MPI_IN_PLACE, broken_total_lengths,
+                                     fh->f_num_aggrs, MPI_LONG, MPI_SUM);
     if (OMPI_SUCCESS != ret) {
         goto exit;
     }
@@ -229,10 +227,8 @@ int mca_fcoll_vulcan_file_read_all (struct ompio_file_t *fh,
 #if OMPIO_FCOLL_WANT_TIME_BREAKDOWN
     start_comm_time = ompi_wtime();
 #endif
-    ret = fh->f_comm->c_coll->coll_allgather (broken_counts, fh->f_num_aggrs, MPI_INT,
-                                              result_counts, fh->f_num_aggrs, MPI_INT,
-                                              fh->f_comm,
-					      fh->f_comm->c_coll->coll_allgather_module);
+    ret = mca_common_ompio_allgather(fh, broken_counts, fh->f_num_aggrs, MPI_INT,
+                                     result_counts, fh->f_num_aggrs, MPI_INT);
     if (OMPI_SUCCESS != ret) {
         goto exit;
     }
@@ -298,17 +294,11 @@ int mca_fcoll_vulcan_file_read_all (struct ompio_file_t *fh,
 #if OMPIO_FCOLL_WANT_TIME_BREAKDOWN
         start_comm_time = ompi_wtime();
 #endif
-        OMPI_COUNT_ARRAY_INIT(&fview_count_desc, aggr_data[i]->fview_count);
-        OMPI_DISP_ARRAY_INIT(&displs_desc, displs);
-        ret = fh->f_comm->c_coll->coll_allgatherv (broken_iov_arrays[i],
-                                                   broken_counts[i],
-                                                   fh->f_iov_type,
-                                                   aggr_data[i]->global_iov_array,
-                                                   fview_count_desc,
-                                                   displs_desc,
-                                                   fh->f_iov_type,
-                                                   fh->f_comm,
-                                                   fh->f_comm->c_coll->coll_allgatherv_module );
+        ret = mca_common_ompio_allgatherv(fh, broken_iov_arrays[i], broken_counts[i],
+                                          fh->f_iov_type,
+                                          aggr_data[i]->global_iov_array,
+                                          aggr_data[i]->fview_count, displs,
+                                          fh->f_iov_type);
         if (OMPI_SUCCESS != ret) {
             goto exit;
         }
@@ -519,8 +509,8 @@ int mca_fcoll_vulcan_file_read_all (struct ompio_file_t *fh,
 	end_read_time = ompi_wtime();
 	read_time += end_read_time - start_read_time;
 #endif
-	ret = ompi_request_wait_all ((fh->f_procs_per_group + 1 )*fh->f_num_aggrs,
-                                     reqs, MPI_STATUS_IGNORE);
+	ret = mca_common_ompio_waitall(fh, (fh->f_procs_per_group + 1) * fh->f_num_aggrs,
+                                       reqs, MPI_STATUS_IGNORE);
         if (OMPI_SUCCESS != ret){
             goto exit;
         }
@@ -541,8 +531,8 @@ int mca_fcoll_vulcan_file_read_all (struct ompio_file_t *fh,
                 goto exit;
             }
         }
-	ret = ompi_request_wait_all ((fh->f_procs_per_group + 1 )*fh->f_num_aggrs,
-                                     reqs, MPI_STATUS_IGNORE);
+	ret = mca_common_ompio_waitall(fh, (fh->f_procs_per_group + 1) * fh->f_num_aggrs,
+                                       reqs, MPI_STATUS_IGNORE);
         if (OMPI_SUCCESS != ret){
             goto exit;
         }
@@ -841,21 +831,18 @@ static int shuffle_init (int index, int cycles, int aggregator, int rank, mca_io
 	    size_t datatype_size;
             reqs[i] = MPI_REQUEST_NULL;
 	    if (0 < data->disp_index[i]) {
-		ompi_datatype_create_hindexed (data->disp_index[i],
-					       OMPI_COUNT_ARRAY_CREATE(data->blocklen_per_process[i]),
-					       OMPI_DISP_ARRAY_CREATE(data->displs_per_process[i]),
-					       MPI_BYTE,
-					       &data->recvtype[i]);
-		ompi_datatype_commit (&data->recvtype[i]);
+		mca_common_ompio_create_hindexed(data->fh, data->disp_index[i],
+					   data->blocklen_per_process[i],
+					   data->displs_per_process[i], MPI_BYTE,
+					   &data->recvtype[i]);
 		opal_datatype_type_size (&data->recvtype[i]->super, &datatype_size);
 
 		if (datatype_size){
-		    ret = MCA_PML_CALL(isend(data->global_buf,
-					     1, data->recvtype[i],
-					     data->procs_in_group[i],
-					     FCOLL_VULCAN_SHUFFLE_TAG+index,
-					     MCA_PML_BASE_SEND_STANDARD,
-					     data->comm, &reqs[i]));
+		    ret = mca_common_ompio_isend(data->fh, data->global_buf,
+					       1, data->recvtype[i],
+					       data->procs_in_group[i],
+					       FCOLL_VULCAN_SHUFFLE_TAG+index,
+					       MCA_PML_BASE_SEND_STANDARD, &reqs[i]);
 		    if (OMPI_SUCCESS != ret){
 			goto exit;
 		    }
@@ -919,20 +906,15 @@ static int shuffle_init (int index, int cycles, int aggregator, int rank, mca_io
         data->total_bytes_written += data->bytes_sent;
 
         if (0 <= block_index) {
-            ompi_datatype_create_hindexed (block_index+1,
-                                           OMPI_COUNT_ARRAY_CREATE(blocklength_proc),
-                                           OMPI_DISP_ARRAY_CREATE(displs_proc),
-                                           MPI_BYTE,
-                                           &newType);
-            ompi_datatype_commit (&newType);
+            mca_common_ompio_create_hindexed(data->fh, block_index + 1,
+                                             blocklength_proc,
+                                             (MPI_Aint *) displs_proc, MPI_BYTE,
+                                             &newType);
 
-            ret = MCA_PML_CALL(irecv((char *)recv_mem_address,
-                                     1,
-                                     newType,
-                                     aggregator,
-                                     FCOLL_VULCAN_SHUFFLE_TAG+index,
-                                     data->comm,
-                                     &reqs[data->procs_per_group]));
+            ret = mca_common_ompio_irecv(data->fh, (char *) recv_mem_address,
+                                         1, newType, aggregator,
+                                         FCOLL_VULCAN_SHUFFLE_TAG+index,
+                                         &reqs[data->procs_per_group]);
             if (MPI_DATATYPE_NULL != newType) {
                 ompi_datatype_destroy(&newType);
             }

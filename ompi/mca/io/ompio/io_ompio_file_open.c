@@ -41,6 +41,7 @@
 #include <math.h>
 #include "io_ompio.h"
 #include "ompi/mca/common/ompio/common_ompio_request.h"
+#include "ompi/mca/common/ompio/common_ompio_mpi.h"
 #include "ompi/mca/topo/topo.h"
 
 int mca_io_ompio_file_open (ompi_communicator_t *comm,
@@ -168,12 +169,8 @@ int mca_io_ompio_file_preallocate (ompi_file_t *fh,
     OPAL_THREAD_LOCK(&fh->f_lock);
     tmp = diskspace;
 
-    ret = data->ompio_fh.f_comm->c_coll->coll_bcast (&tmp,
-                                                    1,
-                                                    OMPI_OFFSET_DATATYPE,
-                                                    OMPIO_ROOT,
-                                                    data->ompio_fh.f_comm,
-                                                    data->ompio_fh.f_comm->c_coll->coll_bcast_module);
+    ret = mca_common_ompio_bcast(&data->ompio_fh, &tmp, 1,
+                                 OMPI_OFFSET_DATATYPE, OMPIO_ROOT);
     if ( OMPI_SUCCESS != ret ) {
         OPAL_THREAD_UNLOCK(&fh->f_lock);
         return OMPI_ERROR;
@@ -262,8 +259,7 @@ int mca_io_ompio_file_preallocate (ompi_file_t *fh,
 
 exit:     
     free ( buf );
-    fh->f_comm->c_coll->coll_bcast ( &ret, 1, MPI_INT, OMPIO_ROOT, fh->f_comm,
-                                   fh->f_comm->c_coll->coll_bcast_module);
+    mca_common_ompio_bcast(&data->ompio_fh, &ret, 1, MPI_INT, OMPIO_ROOT);
     
     if ( diskspace > current_size ) {
         data->ompio_fh.f_fs->fs_file_set_size (&data->ompio_fh, diskspace);
@@ -284,12 +280,8 @@ int mca_io_ompio_file_set_size (ompi_file_t *fh,
 
     tmp = size;
     OPAL_THREAD_LOCK(&fh->f_lock);
-    ret = data->ompio_fh.f_comm->c_coll->coll_bcast (&tmp,
-                                                    1,
-                                                    OMPI_OFFSET_DATATYPE,
-                                                    OMPIO_ROOT,
-                                                    data->ompio_fh.f_comm,
-                                                    data->ompio_fh.f_comm->c_coll->coll_bcast_module);
+    ret = mca_common_ompio_bcast(&data->ompio_fh, &tmp, 1,
+                                 OMPI_OFFSET_DATATYPE, OMPIO_ROOT);
     if ( OMPI_SUCCESS != ret ) {
         opal_output(1, ",mca_io_ompio_file_set_size: error in bcast\n");
         OPAL_THREAD_UNLOCK(&fh->f_lock);
@@ -309,8 +301,7 @@ int mca_io_ompio_file_set_size (ompi_file_t *fh,
         return ret;
     }
     
-    ret = data->ompio_fh.f_comm->c_coll->coll_barrier (data->ompio_fh.f_comm,
-                                                      data->ompio_fh.f_comm->c_coll->coll_barrier_module);
+    ret = mca_common_ompio_barrier(&data->ompio_fh);
     if ( OMPI_SUCCESS != ret ) {
         opal_output(1, ",mca_io_ompio_file_set_size: error in barrier\n");
         OPAL_THREAD_UNLOCK(&fh->f_lock);
@@ -374,12 +365,7 @@ int mca_io_ompio_file_set_atomicity (ompi_file_t *fh,
 
     /* check if the atomicity flag is the same on all processes */
     tmp = flag;
-    data->ompio_fh.f_comm->c_coll->coll_bcast (&tmp,
-                                              1,
-                                              MPI_INT,
-                                              OMPIO_ROOT,
-                                              data->ompio_fh.f_comm,
-                                              data->ompio_fh.f_comm->c_coll->coll_bcast_module);
+    mca_common_ompio_bcast(&data->ompio_fh, &tmp, 1, MPI_INT, OMPIO_ROOT);
 
     if (tmp != flag) {
         OPAL_THREAD_UNLOCK(&fh->f_lock);
@@ -436,8 +422,7 @@ int mca_io_ompio_file_sync (ompi_file_t *fh)
         return MPI_ERR_ACCESS;
     }        
     // Make sure all processes reach this point before syncing the file.
-    ret = data->ompio_fh.f_comm->c_coll->coll_barrier (data->ompio_fh.f_comm,
-                                                       data->ompio_fh.f_comm->c_coll->coll_barrier_module);
+    ret = mca_common_ompio_barrier(&data->ompio_fh);
     if ( MPI_SUCCESS != ret ) {
         OPAL_THREAD_UNLOCK(&fh->f_lock);
         return ret;

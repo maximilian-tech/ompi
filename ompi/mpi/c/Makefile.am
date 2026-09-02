@@ -534,7 +534,8 @@ EXTRA_DIST = $(prototype_sources) \
 libmpi_c_la_SOURCES = \
         ompi_isendrecv.c \
         ompi_sendrecv.c \
-        ompi_abi_fortran.c
+        ompi_abi_fortran.c \
+        mpiio_public_api.c
 
 libmpi_c_la_LIBADD = libmpi_c_profile.la
 

@@ -38,6 +38,7 @@
 #include "ompi/mca/hook/base/base.h"
 #include "ompi/instance/instance.h"
 #include "ompi/mpiext/mpiext.h"
+#include "ompi/runtime/ompi_mpiio_public.h"
 
 
 PROTOTYPE ERROR_CLASS init_thread(INT_OUT argc, ARGV argv, TS_LEVEL required,
@@ -75,6 +76,7 @@ PROTOTYPE ERROR_CLASS init_thread(INT_OUT argc, ARGV argv, TS_LEVEL required,
      * through the registered function pointer, avoiding a direct symbol dependency on libmpi.
      * MPI extensions are only supported in the OMPI ABI, not the MPI Forum ABI. */
     ompi_mpi_instance_register_mpiext_init(ompi_mpiext_init);
+    ompi_mpiio_install_public_api();
 #endif
 
     /* Call the back-end initialization function (we need to put as

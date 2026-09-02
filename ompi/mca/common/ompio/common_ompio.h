@@ -183,6 +183,7 @@ struct ompio_file_t {
     int                    f_amode;
     int                    f_perm;
     ompi_communicator_t   *f_comm;
+    bool                   f_use_mpi_symbols;
     const char            *f_filename;
     char                  *f_fullfilename;
     char                  *f_datarep;

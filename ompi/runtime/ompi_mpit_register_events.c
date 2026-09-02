@@ -22,6 +22,7 @@
 #include "opal/mca/threads/thread_usage.h"
 
 #include "ompi/runtime/ompi_mpit_events.h"
+#include "ompi/runtime/ompi_mpiio_public.h"
 
 /* The MPI ABI of the registering MPI_T tool (process-global; see the header).
    Hard-coded to the Open MPI ABI until open-mpi/ompi#13280. */
@@ -115,6 +116,12 @@ void ompi_mpit_register_events(void)
                                  "producers (default: enabled)",
                                  MCA_BASE_VAR_TYPE_INT, NULL, 0, 0, OPAL_INFO_LVL_9,
                                  MCA_BASE_VAR_SCOPE_READONLY, &register_producers);
+
+    (void) mca_base_var_register("ompi", "mpi", "io", "internal_use_mpi",
+                                 "Route OMPIO internal communication through interposable MPI symbols",
+                                 MCA_BASE_VAR_TYPE_BOOL, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
+                                 OPAL_INFO_LVL_4, MCA_BASE_VAR_SCOPE_ALL_EQ,
+                                 &ompi_mpiio_internal_use_mpi);
 
     /* Clear any handles left from a prior registration cycle before (possibly)
        re-registering.  The OPAL event registry may have been torn down by

@@ -22,6 +22,7 @@ typedef struct mca_io_ompio_local_io_array{
 }mca_io_ompio_local_io_array;
 
 typedef struct mca_io_ompio_aggregator_data {
+    ompio_file_t *fh;
     int *disp_index, *sorted, n;
     size_t *fview_count;
     int *max_disp_index;
